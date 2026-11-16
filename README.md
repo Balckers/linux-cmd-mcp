@@ -12,6 +12,10 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-071C27">
 </p>
 
+<p align="center">
+  <img src="assets/terminal-screenshot.png" width="900" alt="linux-cmd-mcp 启动与调用截图">
+</p>
+
 把 Linux 命令的发现、检查、策略校验与执行封装成 6 个 MCP 工具。模型不必记命令路径，也不用拼接 shell 字符串，按 `command + args` 数组调用即可；默认走 SSE，兼容 Streamable HTTP 与 stdio。
 
 ## 核心功能
@@ -103,10 +107,6 @@ python3 scripts/check_stability.py                    # 并发、超时、长跑
 ```
 
 本机实测：140 项 pytest 通过；端到端 245 项通过；全机巡检坏候选 0；稳定性 22 项通过，60 秒 559 次调用内存无增长。
-
-## 截图
-
-[项目启动截图]
 
 ## 文档
 
