@@ -13,7 +13,7 @@
 |---|---|---|
 | 协议正确性 | 12 项握手 + 20 项 HTTP 传输全通过 | `check_handshake.py` / `check_http_transport.py` |
 | 工具行为 | 6 工具 × 2 轮 = 245 项、3 轮 = 365 项全 PASS | `check_e2e_tools.py` |
-| 单元/集成 | 140 passed | `pytest -q` |
+| 单元/集成 | 145 passed | `pytest -q` |
 | 全命令覆盖 | 1818 个命令 / 1890 条候选，坏候选 0 | `check_all_commands.py --json` |
 | 并发 | 8 客户端 × 10 轮全部正确，内存 87MB → 91MB | `check_stability.py` |
 | 非法入参 | 100 次全部 `INVALID_ARGUMENT`，之后仍可执行命令 | 同上 |
@@ -95,7 +95,7 @@ DEBUG 级日志（36074 行）也无任何异常。脚本已固定为“日志�
 ```bash
 cd linux-cmd-mcp
 bash scripts/bootstrap_deps.sh                  # 依赖自愈（幂等）
-python3 -m pytest -q                            # 140 passed
+python3 -m pytest -q                            # 145 passed
 python3 scripts/check_handshake.py --verbose    # 12 项
 python3 scripts/check_http_transport.py         # 20 项
 python3 scripts/check_e2e_tools.py --rounds 2   # 245 项

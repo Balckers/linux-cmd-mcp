@@ -4,7 +4,7 @@
 > 环境：Ubuntu 22.04.5 / kernel 6.6.95 / Python 3.12.11 / mcp 1.30.0。
 > 方法：逐文件静态审计 + 起真实 SSE 服务器（Bearer 鉴权）逐项探测 + 修复后回归复测。
 > 结论：**共确认并修复 12 个真实问题（含 1 个静默丢字段、2 个协议兼容/安全解析、2 个语义错误）**；
-> 全量回归 **140 passed**，端到端 **245/245 PASS**，全机 **1818 命令 / 1890 候选 / broken=0**，
+> 全量回归 **145 passed**，端到端 **245/245 PASS**，全机 **1818 命令 / 1890 候选 / broken=0**，
 > 稳定性 **22/22 PASS**。无遗留未修缺陷。
 
 ---
@@ -44,7 +44,7 @@
 
 | 验证项 | 命令 | 结果 |
 |---|---|---|
-| 单元/集成/协议/HTTP/参数守卫 | `python3 -m pytest -q` | **140 passed in ~21s** |
+| 单元/集成/协议/HTTP/参数守卫 | `python3 -m pytest -q` | **145 passed in ~31s** |
 | 静态检查 | `python3 -m pyflakes src tests scripts examples` | 无输出 |
 | 字节码编译 | `python3 -m compileall -q src scripts tests examples` | 通过 |
 | 配置自检 | `python3 -m linux_cmd_mcp --check-config` | ok；transport=sse / 1818 命令 / 扫描 16 目录 |

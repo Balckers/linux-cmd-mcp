@@ -151,9 +151,11 @@ class Settings:
 
         http_port = _read_int(env, "LCMD_HTTP_PORT", 8765)
         _require_range("LCMD_HTTP_PORT", http_port, 1, 65535)
-        http_host = _read(env, "LCMD_HTTP_HOST", "127.0.0.1")
+        http_host = _read(env, "LCMD_HTTP_HOST", "127.0.0.1").strip()
+        if http_host.startswith("[") and http_host.endswith("]"):
+            http_host = http_host[1:-1]
         if not http_host or any(ch.isspace() for ch in http_host):
-            raise ConfigError(f"LCMD_HTTP_HOST={http_host!r} 非法", "写主机名或 IP，例如 127.0.0.1、0.0.0.0")
+            raise ConfigError(f"LCMD_HTTP_HOST={http_host!r} 非法", "写主机名或 IP，例如 127.0.0.1、0.0.0.0、::1")
         token_raw = env.get("LCMD_AUTH_TOKEN")
         auth_token = token_raw.strip() if token_raw else None
         if auth_token is not None:

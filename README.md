@@ -8,7 +8,7 @@
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-0A2C3A">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-1.x-21B79A">
   <img alt="Transport" src="https://img.shields.io/badge/Transport-SSE%20%7C%20stdio-236C78">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-140%20passed-2FD4B0">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-145%20passed-2FD4B0">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-071C27">
 </p>
 
@@ -43,6 +43,55 @@ curl -s http://127.0.0.1:8765/healthz
 ```
 
 预期返回包含 `{"status":"ok","transport":"sse","auth_enabled":false,...}`。客户端接入示例见 [`examples/`](examples/)。
+
+## 修改监听 IP
+
+`--host` 改的是服务绑定地址，不是系统网卡；改完必须重启进程。
+
+```bash
+# 只允许本机访问（默认）
+linux-cmd-mcp --host 127.0.0.1 --port 8765
+
+# 监听所有 IPv4 网卡；非回环地址必须先配令牌
+export LCMD_AUTH_TOKEN="$(openssl rand -hex 32)"
+linux-cmd-mcp --host 0.0.0.0 --port 8765
+
+# 只监听指定网卡
+linux-cmd-mcp --host 192.168.1.20 --port 8765
+```
+
+`--host` / `--port` 优先于 `LCMD_HTTP_HOST` / `LCMD_HTTP_PORT`。先看实际生效地址：
+
+```bash
+linux-cmd-mcp --check-config --host 0.0.0.0 --port 8765
+curl -s http://127.0.0.1:8765/healthz
+```
+
+`/healthz` 会返回 `bind_host` / `bind_port`，可直接确认绑到了哪里。绑定非回环地址但没有 `LCMD_AUTH_TOKEN` 时，启动直接拒绝。
+
+## 后台运行
+
+`--daemon` 启动脱离终端的子进程，等 `/healthz` 就绪后返回 PID、监听地址和日志路径；不需要自己加 `nohup` 或 `&`。
+
+```bash
+linux-cmd-mcp --daemon --host 127.0.0.1 --port 8765
+linux-cmd-mcp --status
+linux-cmd-mcp --stop
+```
+
+默认 PID 文件为 `$XDG_STATE_HOME/linux-cmd-mcp/server.pid`（未设置时 `~/.local/state/linux-cmd-mcp/server.pid`），日志为同目录 `server.log`。也可以显式指定：
+
+```bash
+linux-cmd-mcp --daemon --host 0.0.0.0 --port 8765 \
+  --pid-file /run/linux-cmd-mcp/server.pid \
+  --log-file /var/log/linux-cmd-mcp/server.log
+```
+
+- `--daemon` 仅支持 `sse` / `streamable-http`；`stdio` 由宿主进程直接拉起，不能后台化。
+- `--status` 运行中返回 0，未运行返回 1，输出含 `health` / `healthy` 的 JSON。
+- `--stop` 先 SIGTERM，默认等 10 秒再 SIGKILL；PID 文件不存在时幂等返回 0。
+- PID 文件是 JSON、权限 0600；停止前会校验 `/proc/<pid>/cmdline`，PID 被复用时拒绝误杀。
+- systemd 示例见 [`examples/systemd/linux-cmd-mcp.service`](examples/systemd/linux-cmd-mcp.service)，完整说明见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)。
 
 ## 工具清单
 
@@ -91,13 +140,13 @@ linux-cmd-mcp/
 │   ├── runner.py            # 子进程执行、超时、取消、输出截断
 │   ├── http_transport.py    # SSE / Streamable HTTP、鉴权、Origin
 │   └── server.py            # 工具注册与 CLI
-└── tests/                   # 140 项单元/集成/协议测试
+└── tests/                   # 145 项单元/集成/协议测试
 ```
 
 ## 自检与验收
 
 ```bash
-python3 -m pytest -q                                  # 140 passed
+python3 -m pytest -q                                  # 145 passed
 python3 -m pyflakes src tests scripts examples
 python3 scripts/check_handshake.py                    # stdio 握手 12 项
 python3 scripts/check_http_transport.py               # SSE / HTTP 20 项
@@ -106,11 +155,12 @@ python3 scripts/check_all_commands.py                 # 1818 命令 / 1890 候�
 python3 scripts/check_stability.py                    # 并发、超时、长跑、优雅退出 22 项
 ```
 
-本机实测：140 项 pytest 通过；端到端 245 项通过；全机巡检坏候选 0；稳定性 22 项通过，60 秒 559 次调用内存无增长。
+本机实测：145 项 pytest 通过；端到端 245 项通过；全机巡检坏候选 0；稳定性 22 项通过，60 秒 559 次调用内存无增长。
 
 ## 文档
 
 - [策略、限额与错误码](docs/POLICY.md)
+- [监听 IP 与后台运行](docs/OPERATIONS.md)
 - [全机命令巡检结论](docs/COMMAND_HEALTH.md)
 - [稳定性审计](docs/STABILITY_AUDIT.md)
 - [全面诊断报告](docs/AUDIT_REPORT.md)

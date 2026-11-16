@@ -33,6 +33,7 @@ from pydantic import ValidationError
 
 from . import __version__
 from .config import Settings
+from .daemon import daemon_status, start_daemon, stop_daemon
 from .errors import ConfigError, ErrorCode, ToolFailure
 from .http_transport import serve_http
 from .logging_setup import configure_logging
@@ -211,7 +212,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--host",
         default=None,
-        help="HTTP/SSE 监听地址，默认取 LCMD_HTTP_HOST（127.0.0.1）",
+        help="HTTP/SSE 监听地址（修改绑定 IP），默认取 LCMD_HTTP_HOST（127.0.0.1）",
     )
     parser.add_argument(
         "--port",
@@ -223,6 +224,46 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--check-config",
         action="store_true",
         help="打印生效配置与 PATH 扫描摘要后退出（不启动 MCP 会话）",
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--daemon",
+        "--background",
+        dest="daemon",
+        action="store_true",
+        help="后台启动并等待 /healthz 就绪；SSE / Streamable HTTP 可用，stdio 不支持",
+    )
+    mode.add_argument(
+        "--stop",
+        action="store_true",
+        help="按 PID 文件停止后台实例（幂等）",
+    )
+    mode.add_argument(
+        "--status",
+        action="store_true",
+        help="查看后台实例状态（运行中返回 0，未运行返回 1）",
+    )
+    parser.add_argument(
+        "--pid-file",
+        default=None,
+        help="PID 状态文件；默认 $XDG_STATE_HOME/linux-cmd-mcp/server.pid 或 ~/.local/state/linux-cmd-mcp/server.pid",
+    )
+    parser.add_argument(
+        "--log-file",
+        default=None,
+        help="后台日志文件；默认与 PID 文件同目录的 server.log",
+    )
+    parser.add_argument(
+        "--startup-timeout",
+        type=float,
+        default=8.0,
+        help="--daemon 等待 /healthz 就绪的秒数（默认 8）",
+    )
+    parser.add_argument(
+        "--stop-timeout",
+        type=float,
+        default=10.0,
+        help="--stop 等待进程退出的秒数（默认 10，超时发 SIGKILL）",
     )
     parser.add_argument(
         "--log-level",
@@ -237,8 +278,41 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _normalize_host(host: str) -> str:
+    value = host.strip()
+    if not value or any(ch.isspace() for ch in value):
+        raise ConfigError(f"监听地址 {host!r} 非法", "写 IP 或主机名，例如 127.0.0.1、0.0.0.0、192.168.1.20")
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1]
+    return value
+
+
+def _print_json(payload: object) -> None:
+    json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
+    sys.stdout.write("\n")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
+
+    # 停止/状态不依赖业务配置：即使环境变量坏掉，也要能把后台实例收回来。
+    if args.status:
+        try:
+            payload = daemon_status(args.pid_file)
+        except ConfigError as exc:
+            print(f"linux-cmd-mcp: {exc}", file=sys.stderr)
+            return 1
+        _print_json(payload)
+        return 0 if payload.get("running") else 1
+    if args.stop:
+        try:
+            payload = stop_daemon(args.pid_file, timeout=args.stop_timeout)
+        except ConfigError as exc:
+            print(f"linux-cmd-mcp: {exc}", file=sys.stderr)
+            return 1
+        _print_json(payload)
+        return 0
+
     env = dict(os.environ)
     if args.log_level:
         env["LCMD_LOG_LEVEL"] = args.log_level
@@ -251,8 +325,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     configure_logging(settings.log_level)
 
-    host = args.host or settings.http_host
-    port = args.port if args.port is not None else settings.http_port
+    try:
+        host = _normalize_host(args.host or settings.http_host)
+        port = args.port if args.port is not None else settings.http_port
+        if not 1 <= port <= 65535:
+            raise ConfigError(f"端口 {port} 非法", "端口必须在 1..65535 之间。")
+    except ConfigError as exc:
+        print(f"linux-cmd-mcp: configuration error: {exc}", file=sys.stderr)
+        return 64
+
+    # 把 --host/--port 合并进配置快照：--check-config、/healthz 与 serve_http
+    # 看到的是同一个实际监听地址，不会出现“显示 127.0.0.1、实际绑 0.0.0.0”。
+    settings = settings.with_changes(http_host=host, http_port=port)
 
     if args.check_config:
         try:
@@ -260,8 +344,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         except ConfigError as exc:
             print(f"linux-cmd-mcp: configuration error: {exc}", file=sys.stderr)
             return 64
-        json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
-        sys.stdout.write("\n")
+        _print_json(payload)
+        return 0
+
+    if args.daemon:
+        try:
+            payload = start_daemon(
+                settings,
+                args.transport,
+                host,
+                port,
+                pid_file=args.pid_file,
+                log_file=args.log_file,
+                startup_timeout=args.startup_timeout,
+                log_level=args.log_level,
+            )
+        except ConfigError as exc:
+            print(f"linux-cmd-mcp: {exc}", file=sys.stderr)
+            return 1
+        _print_json(payload)
         return 0
 
     try:

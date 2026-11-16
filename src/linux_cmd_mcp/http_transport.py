@@ -146,8 +146,19 @@ class OriginGuardMiddleware(_GuardMiddleware):
         return False
 
 
-def build_http_app(mcp: FastMCP, settings: Settings, transport: str) -> Starlette:
-    """构造带鉴权与 Origin 校验的 ASGI 应用。"""
+def build_http_app(
+    mcp: FastMCP,
+    settings: Settings,
+    transport: str,
+    *,
+    host: str | None = None,
+    port: int | None = None,
+) -> Starlette:
+    """构造带鉴权与 Origin 校验的 ASGI 应用。
+
+    ``host`` / ``port`` 是本次实际监听地址（可能来自 ``--host`` / ``--port``），
+    写进 ``/healthz`` 便于确认“改 IP 后到底绑到了哪里”。
+    """
     if transport == "sse":
         app = mcp.sse_app()
     elif transport == "streamable-http":
@@ -165,6 +176,8 @@ def build_http_app(mcp: FastMCP, settings: Settings, transport: str) -> Starlett
             {
                 "status": "ok",
                 "transport": transport,
+                "bind_host": host if host is not None else settings.http_host,
+                "bind_port": port if port is not None else settings.http_port,
                 "auth_enabled": settings.auth_token is not None,
                 "policy_mode": settings.policy_mode,
             }
@@ -191,7 +204,7 @@ def serve_http(mcp: FastMCP, settings: Settings, transport: str, *, host: str, p
     if settings.auth_token is None:
         logger.warning("未配置 LCMD_AUTH_TOKEN：仅因绑定 %s 才允许启动，本机任意进程都可调用", host)
 
-    app = build_http_app(mcp, settings, transport)
+    app = build_http_app(mcp, settings, transport, host=host, port=port)
     import uvicorn
 
     endpoints = {"sse": "GET /sse + POST /messages/", "streamable-http": "POST/GET /mcp"}
