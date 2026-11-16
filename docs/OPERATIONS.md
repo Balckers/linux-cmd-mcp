@@ -89,12 +89,15 @@ linux-cmd-mcp --stop   --pid-file /run/linux-cmd-mcp/server.pid
 仓库提供了示例单元 [`examples/systemd/linux-cmd-mcp.service`](../examples/systemd/linux-cmd-mcp.service)。它以前台模式运行，由 systemd 负责拉起、重启和日志收集，不要再叠加 `--daemon`。
 
 ```bash
+sudo useradd --system --create-home --home-dir /var/lib/linux-cmd-mcp \
+  --shell /usr/sbin/nologin linuxcmd || true
 sudo install -m 0644 examples/systemd/linux-cmd-mcp.service /etc/systemd/system/
 sudo install -m 0600 /dev/null /etc/linux-cmd-mcp.env
 sudo tee /etc/linux-cmd-mcp.env >/dev/null <<'EOF'
 LCMD_AUTH_TOKEN=替换为至少16字符的随机令牌
 LCMD_POLICY_MODE=standard
 EOF
+sudo chmod 0600 /etc/linux-cmd-mcp.env
 sudo systemctl daemon-reload
 sudo systemctl enable --now linux-cmd-mcp
 sudo systemctl status linux-cmd-mcp
