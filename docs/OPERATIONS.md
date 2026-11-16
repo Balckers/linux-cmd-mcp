@@ -39,6 +39,38 @@ curl -s http://127.0.0.1:8765/healthz
 修改监听 IP 后必须重启进程；当前进程不支持热切换监听地址。绑定非回环地址
 但没有 `LCMD_AUTH_TOKEN` 时，前台和后台启动都会直接拒绝，不会裸奔。
 
+## 公网隧道与 Host 白名单
+
+MCP 传输层会校验 HTTP `Host` 头。经樱花隧道、frp、ngrok、Nginx 等暴露到公网时，
+公网域名不是 `127.0.0.1` / `localhost` / `[::1]`，默认会返回 `421 Invalid Host header`。
+这不是 Token 错误，Bearer 鉴权此时已经通过。
+
+把公网 Host 加入白名单：
+
+```bash
+export LCMD_AUTH_TOKEN="$(openssl rand -hex 32)"
+export LCMD_ALLOWED_HOSTS="nas-api-backup.example.com:*"
+linux-cmd-mcp --transport streamable-http --host 127.0.0.1 --port 8765
+```
+
+`LCMD_ALLOWED_HOSTS` 的写法：
+
+- `nas.example.com`：只允许不带端口的 Host
+- `nas.example.com:*`：允许该域名的任意端口（隧道端口会变化时用这个）
+- `nas.example.com:8765`：只允许指定端口
+- `*`：关闭 SDK 的 Host 白名单（Bearer 与 Origin 校验仍然生效）
+
+多个值用逗号分隔。先验证实际放行结果：
+
+```bash
+curl -i -H "Host: nas-api-backup.example.com:52877" \
+  -H "Authorization: Bearer 你的令牌" \
+  http://127.0.0.1:8765/sse
+```
+
+返回 `200` 并出现 `event: endpoint` 即表示 Host 校验通过；公网客户端再按
+`https://公网域名/sse` 或 `https://公网域名/mcp` 接入。
+
 ## 后台运行
 
 `--daemon` 会启动一个脱离终端的子进程，等待 `/healthz` 就绪后返回 PID、

@@ -64,6 +64,25 @@ def test_http_summary_never_echoes_token() -> None:
     assert settings.auth_required is True
 
 
+def test_allowed_hosts_parse_and_wildcard() -> None:
+    settings = Settings.from_env({"LCMD_ALLOWED_HOSTS": "nas.example.com:*,ops.example.com"})
+    assert settings.allowed_hosts == ("nas.example.com:*", "ops.example.com")
+
+    wildcard = Settings.from_env({"LCMD_ALLOWED_HOSTS": "*"})
+    assert wildcard.allowed_hosts == ("*",)
+
+    with pytest.raises(ConfigError):
+        Settings.from_env({"LCMD_ALLOWED_HOSTS": "https://nas.example.com/sse"})
+
+
+def test_http_summary_reports_allowed_hosts_without_token() -> None:
+    token = "0123456789abcdef0123456789abcdef"
+    settings = Settings.from_env({"LCMD_AUTH_TOKEN": token, "LCMD_ALLOWED_HOSTS": "nas.example.com:*"})
+    summary = settings.http_summary()
+    assert summary["allowed_hosts"] == ["nas.example.com:*"]
+    assert token not in str(summary)
+
+
 def test_empty_path_override_is_respected() -> None:
     """显式设置 LCMD_PATH='' 表示不搜索 PATH，而不是悄悄回退到进程 PATH。"""
     settings = Settings.from_env({"LCMD_PATH": ""})

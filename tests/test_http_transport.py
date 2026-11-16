@@ -112,6 +112,24 @@ def test_build_http_app_exposes_healthz_and_keeps_sdk_routes(transport: str) -> 
     asyncio.run(scenario())
 
 
+def test_transport_security_allows_declared_tunnel_host() -> None:
+    settings = Settings.from_env({"LCMD_AUTH_TOKEN": TOKEN, "LCMD_ALLOWED_HOSTS": "nas.example.com:*"})
+    mcp = build_server(settings)
+    security = mcp.settings.transport_security
+    assert security is not None
+    assert security.enable_dns_rebinding_protection is True
+    assert "nas.example.com:*" in security.allowed_hosts
+    assert "127.0.0.1:*" in security.allowed_hosts
+
+
+def test_transport_security_wildcard_disables_host_filter() -> None:
+    settings = Settings.from_env({"LCMD_AUTH_TOKEN": TOKEN, "LCMD_ALLOWED_HOSTS": "*"})
+    mcp = build_server(settings)
+    security = mcp.settings.transport_security
+    assert security is not None
+    assert security.enable_dns_rebinding_protection is False
+
+
 def test_serve_http_fails_closed_on_non_loopback_without_token() -> None:
     settings = Settings.from_env({})
     mcp = build_server(settings)

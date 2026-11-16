@@ -31,7 +31,8 @@ LCMD_INCLUDE_DEFAULT_DIRS        并入标准命令目录一起扫描           
 LCMD_AUTH_TOKEN                 HTTP/SSE Bearer 令牌（≥16 字符）    空
 LCMD_HTTP_HOST                  SSE/HTTP 监听地址                  127.0.0.1
 LCMD_HTTP_PORT                  SSE/HTTP 监听端口                  8765
-LCMD_ALLOWED_ORIGINS            额外允许的 Origin                  空
+LCMD_ALLOWED_ORIGINS           额外允许的 Origin                  空
+LCMD_ALLOWED_HOSTS             MCP 传输层允许的 Host（逗号分隔）    空
 ===============================  ==============================  ================
 """
 
@@ -87,6 +88,7 @@ class Settings:
     http_host: str
     http_port: int
     allowed_origins: tuple[str, ...]
+    allowed_hosts: tuple[str, ...]
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "Settings":
@@ -170,6 +172,7 @@ class Settings:
                     "令牌必须是单个不含空白的字符串。",
                 )
         allowed_origins = _read_list(env, "LCMD_ALLOWED_ORIGINS")
+        allowed_hosts = _host_patterns(_read_list(env, "LCMD_ALLOWED_HOSTS"), "LCMD_ALLOWED_HOSTS")
 
         # LCMD_PATH 只要被显式设置（包括空字符串）就覆盖进程 PATH：
         # 空值表示“不搜索任何 PATH 目录”，而不是“回退到进程 PATH”。
@@ -200,6 +203,7 @@ class Settings:
             http_host=http_host,
             http_port=http_port,
             allowed_origins=allowed_origins,
+            allowed_hosts=allowed_hosts,
         )
 
         # 交叉校验：默认超时不得超过上限（已单独校验），allowlist 与 denylist 不得冲突。
@@ -232,6 +236,7 @@ class Settings:
             "auth_enabled": self.auth_token is not None,
             "origin_check": True,
             "allowed_origins": list(self.allowed_origins) or ["loopback(http://127.0.0.1, http://localhost)"],
+            "allowed_hosts": list(self.allowed_hosts) or ["auto(bind host)"],
         }
 
     def effective_path_env(self) -> str:
@@ -306,6 +311,29 @@ def _read_list(env: Mapping[str, str], key: str) -> tuple[str, ...]:
     if raw is None:
         return ()
     return tuple(item for item in _SEPARATORS.split(raw.strip()) if item)
+
+
+def _host_patterns(items: Sequence[str], source: str) -> tuple[str, ...]:
+    """校验 ``LCMD_ALLOWED_HOSTS``：支持 host、host:port、host:*、*。
+
+    ``*`` 表示关闭 SDK 的 Host 白名单（仍保留 Bearer 与 Origin 校验），
+    适合公网隧道域名会变化、或反向代理改写 Host 的场景。
+    """
+    result: list[str] = []
+    for item in items:
+        value = item.strip().rstrip("/")
+        if not value:
+            continue
+        if value in {"*", "all"}:
+            return ("*",)
+        if "://" in value or "/" in value or any(ch.isspace() or ch == "\x00" for ch in value):
+            raise ConfigError(
+                f"{source} 中的条目 {item!r} 不是合法的 Host 模式",
+                "只写主机名或 host:port，例如 nas.example.com 或 nas.example.com:*；不要带 http:// 或路径。",
+            )
+        if value not in result:
+            result.append(value)
+    return tuple(result)
 
 
 def _names(items: Sequence[str], source: str) -> tuple[str, ...]:

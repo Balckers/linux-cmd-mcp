@@ -29,6 +29,7 @@ from contextlib import asynccontextmanager
 
 from mcp import types as mcp_types
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import ValidationError
 
 from . import __version__
@@ -43,6 +44,9 @@ from .tools._common import policy_summary, set_current_state
 from .tools._flat import INPUT_MODELS, install_sdk_compat
 
 logger = logging.getLogger("linux_cmd_mcp")
+
+DEFAULT_ALLOWED_HOSTS = ("127.0.0.1:*", "localhost:*", "[::1]:*")
+DEFAULT_ALLOWED_ORIGINS = ("http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*")
 
 INSTRUCTIONS = """\
 本服务器在本地 Linux 上提供受控、可审计的命令发现与执行能力，共 6 个工具：
@@ -78,6 +82,28 @@ env 白名单，以及 timeout/输出/并发限额。它是护栏而非沙箱：
 """
 
 
+def _transport_security(settings: Settings) -> TransportSecuritySettings | None:
+    """按 ``LCMD_ALLOWED_HOSTS`` 生成 SDK 的 Host/Origin 校验配置。
+
+    SDK 在监听回环地址时会默认开启 DNS rebinding 保护，只允许
+    ``127.0.0.1`` / ``localhost`` / ``[::1]`` 作为 Host。经隧道或反向代理
+    暴露时，公网域名不是这三个值，会直接返回 ``421 Invalid Host header``，
+    即使 Bearer 令牌正确。这里显式把用户声明的公网 Host 加入白名单；
+    ``LCMD_ALLOWED_HOSTS=*`` 则关闭该层校验，但仍保留 Bearer 与 Origin 校验。
+    """
+    if not settings.allowed_hosts:
+        return None
+    if "*" in settings.allowed_hosts:
+        return TransportSecuritySettings(enable_dns_rebinding_protection=False)
+    hosts = list(dict.fromkeys([*DEFAULT_ALLOWED_HOSTS, *settings.allowed_hosts]))
+    origins = list(dict.fromkeys([*DEFAULT_ALLOWED_ORIGINS, *settings.allowed_origins]))
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=hosts,
+        allowed_origins=origins,
+    )
+
+
 def build_server(settings: Settings | None = None) -> FastMCP:
     """构造 FastMCP 实例：配置日志、构建状态、注册工具与 lifespan。"""
     settings = settings or Settings.from_env()
@@ -108,6 +134,8 @@ def build_server(settings: Settings | None = None) -> FastMCP:
         instructions=INSTRUCTIONS,
         lifespan=lifespan,
         log_level=settings.log_level,
+        host=settings.http_host,
+        transport_security=_transport_security(settings),
     )
     # FastMCP 1.x 未暴露 version 参数，serverInfo.version 取自底层 Server，
     # 这里显式设置，避免宿主把 SDK 版本当成我们的服务版本。

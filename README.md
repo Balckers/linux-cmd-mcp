@@ -8,7 +8,7 @@
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-0A2C3A">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-1.x-21B79A">
   <img alt="Transport" src="https://img.shields.io/badge/Transport-SSE%20%7C%20stdio-236C78">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-145%20passed-2FD4B0">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-149%20passed-2FD4B0">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-071C27">
 </p>
 
@@ -68,6 +68,23 @@ curl -s http://127.0.0.1:8765/healthz
 ```
 
 `/healthz` 会返回 `bind_host` / `bind_port`，可直接确认绑到了哪里。绑定非回环地址但没有 `LCMD_AUTH_TOKEN` 时，启动直接拒绝。
+
+### 走隧道或反向代理时
+
+MCP SDK 会校验请求的 `Host` 头。经樱花隧道、ngrok、frp 或 Nginx 暴露时，公网域名不是本机回环地址，默认会返回：
+
+```text
+Invalid Host header
+```
+
+需要把公网域名加入白名单，例如：
+
+```bash
+LCMD_ALLOWED_HOSTS="nas.example.com:*" \
+  linux-cmd-mcp --host 127.0.0.1 --port 8765
+```
+
+`LCMD_ALLOWED_HOSTS` 支持 `host`、`host:port`、`host:*`，多个用逗号分隔。隧道域名会变化或反向代理改写 Host 时，可以设为 `*` 关闭 Host 白名单（Bearer 与 Origin 校验仍然生效）。
 
 ## 后台运行
 
@@ -140,13 +157,13 @@ linux-cmd-mcp/
 │   ├── runner.py            # 子进程执行、超时、取消、输出截断
 │   ├── http_transport.py    # SSE / Streamable HTTP、鉴权、Origin
 │   └── server.py            # 工具注册与 CLI
-└── tests/                   # 145 项单元/集成/协议测试
+└── tests/                   # 149 项单元/集成/协议测试
 ```
 
 ## 自检与验收
 
 ```bash
-python3 -m pytest -q                                  # 145 passed
+python3 -m pytest -q                                  # 149 passed
 python3 -m pyflakes src tests scripts examples
 python3 scripts/check_handshake.py                    # stdio 握手 12 项
 python3 scripts/check_http_transport.py               # SSE / HTTP 20 项
@@ -155,7 +172,7 @@ python3 scripts/check_all_commands.py                 # 1818 命令 / 1890 候�
 python3 scripts/check_stability.py                    # 并发、超时、长跑、优雅退出 22 项
 ```
 
-本机实测：145 项 pytest 通过；端到端 245 项通过；全机巡检坏候选 0；稳定性 22 项通过，60 秒 559 次调用内存无增长。
+本机实测：149 项 pytest 通过；端到端 245 项通过；全机巡检坏候选 0；稳定性 22 项通过，60 秒 559 次调用内存无增长。
 
 ## 文档
 
