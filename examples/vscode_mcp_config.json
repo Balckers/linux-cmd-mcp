@@ -1,0 +1,18 @@
+{
+  "servers": {
+    "linux-cmd-mcp": {
+      "type": "stdio",
+      "command": "/usr/bin/python3",
+      "args": [
+        "-m",
+        "linux_cmd_mcp",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "LCMD_POLICY_MODE": "standard",
+        "LCMD_ALLOWED_WORKDIRS": "/home/you/work,/tmp"
+      }
+    }
+  }
+}

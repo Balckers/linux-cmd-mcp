@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "linux-cmd-mcp": {
+      "command": "/usr/bin/python3",
+      "args": [
+        "-m",
+        "linux_cmd_mcp",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "LCMD_POLICY_MODE": "unrestricted",
+        "LCMD_ALLOWED_WORKDIRS": "/home/you/work,/tmp",
+        "LCMD_MAX_TIMEOUT_SECONDS": "30",
+        "LCMD_DEFAULT_TIMEOUT_SECONDS": "10",
+        "LCMD_MAX_OUTPUT_BYTES": "262144",
+        "LCMD_MAX_CONCURRENCY": "2",
+        "LCMD_LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}
